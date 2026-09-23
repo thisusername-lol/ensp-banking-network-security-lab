@@ -143,7 +143,7 @@ Functional tests include:
 ```text
 telnet 200.1.1.10 80
 telnet 200.1.1.10 23
- telnet 192.168.50.11 1521
+telnet 192.168.50.11 1521
 ftp 192.168.50.12
 test ping -c 10000 -m 1 200.1.1.1
 ```
@@ -163,7 +163,9 @@ Use the ICMP flood test only inside the eNSP lab. The expected results and evide
 ## Known notes
 
 - The original project folder names (`configration`, `presention`, and `ensp projact`) are preserved to avoid breaking existing eNSP/project links.
-- `R-Attacker .txt` is the original uploaded filename; [`R-Attacker.txt`](configration/R-Attacker.txt) is also provided as a clean, space-free copy.
+- `R-Attacker .txt` is the original uploaded filename and is intentionally preserved.
+- The BackOffice address duplication is intentional in the documented design: `R-BackOffice` uses `192.168.20.10` because it is the device used to perform the FTP test, while the separate PC6 entry is not included as an active PC in the saved eNSP version. PC6 was disconnected/removed from the active eNSP topology because the PC implementation rejected the FTP test, whereas the router successfully allowed FTP from the BackOffice segment.
+- Therefore, the repeated `192.168.20.10` value is not intended to represent two simultaneously active devices in the final eNSP topology. If PC6 is re-added later, assign it a unique address such as `192.168.20.20` and verify the gateway and firewall behavior before testing.
 - The FTP username and password in the inventory are demonstration credentials only and must not be reused outside the lab.
 - Binary eNSP files should be opened through eNSP rather than edited as text.
 
