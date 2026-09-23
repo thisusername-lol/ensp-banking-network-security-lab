@@ -1,0 +1,9 @@
+# Generated and local files
+.DS_Store
+Thumbs.db
+*.bak
+*.log
+
+# Temporary eNSP exports and local backups
+*.tmp
+*.swp

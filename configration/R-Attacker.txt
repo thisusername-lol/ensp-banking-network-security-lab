@@ -1,0 +1,14 @@
+system-view
+sysname R-Attacker
+interface GigabitEthernet0/0/1
+ undo shutdown
+ ip address 200.1.1.200 255.255.255.0
+ quit
+interface GigabitEthernet0/0/2
+ undo shutdown
+ ip address 100.2.2.1 255.255.255.0
+ quit
+ip route-static 0.0.0.0 0.0.0.0 200.1.1.1
+quit
+save
+y

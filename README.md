@@ -1,439 +1,172 @@
-# 🏦 Banking Network Security Project — ENSP Documentation
+# 🏦 Huawei eNSP Banking Network Security Lab
 
-## 📋 Project Overview
+[![Huawei eNSP](https://img.shields.io/badge/Simulator-Huawei%20eNSP-red)](https://support.huawei.com/enterprise/en/)
+[![Firewall](https://img.shields.io/badge/Firewall-USG6525E-blue)](https://support.huawei.com/enterprise/en/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-This is a **Huawei ENSP (Enterprise Network Simulator)** project simulating a **complete banking network infrastructure** with security policies, NAT, firewall filtering, and multi-zone architecture. The project demonstrates network security concepts including:
+A documented Huawei eNSP banking-network simulation focused on segmentation, least privilege, DMZ protection, NAT, FTP ASPF inspection, and attack-defense verification.
 
-- Network segmentation with security zones
-- Firewall security policies (permit/deny rules)
-- NAT (Network Address Translation) — both Static NAT Server and Source NAT (Easy-IP)
-- ASPF (Application Layer Packet Filter) for FTP control
-- Attack defense (ICMP flood, SYN flood)
-- AAA and management security
-- Full packet verification and evidence capture
+> **Lab only:** The addresses, credentials, and attack simulations in this repository are intended for the isolated eNSP environment. Do not reuse them in a production network.
 
----
+## Contents
 
-## 📁 Project Structure
+- [Overview](#overview)
+- [Topology](#topology)
+- [Addressing plan](#addressing-plan)
+- [Security model](#security-model)
+- [NAT and services](#nat-and-services)
+- [Running the lab](#running-the-lab)
+- [Verification](#verification)
+- [Repository map](#repository-map)
+- [Known notes](#known-notes)
 
-```
-G:\nti\+final_ensp\projact\
-│
-├── ☁️ cloud/
-│   └── topology_cloud.json          ← ENSP Cloud topology configuration (JSON)
-│
-├── ⚙️ configration/
-│   ├── FW-Bank.txt                  ← Huawei Firewall (USG6525E) full configuration
-│   ├── Server.txt                   ← Server IP/Mask/Gateway/Service table
-│   ├── PCs.txt                      ← PC IP/Mask/Gateway/Zone table
-│   ├── R-Internet.txt               ← R-Internet Router configuration
-│   ├── R-Attacker.txt               ← R-Attacker Router configuration
-│   ├── R-BackOffice.txt             ← R-BackOffice Router configuration
-│   └── Verification.txt             ← Verification/test commands
-│
-├── 🖼️ photo/
-│   ├── info.txt                     ← Detailed photo descriptions & verification notes
-│   ├── interface ensp.png           ← ENSP interface screenshot
-│   ├── interface cloud.jpeg         ← Cloud interface screenshot
-│   ├── topolgy ensp.png             ← ENSP topology diagram
-│   ├── topolgy cloud .jpeg          ← Cloud topology diagram
-│   ├── NAT policy cloud.jpeg        ← NAT policy configuration screenshot
-│   ├── NAT policy ensp.png          ← NAT policy in ENSP
-│   ├── policy security ensp.png     ← Security policy in ENSP
-│   ├── security policy cloud .jpeg  ← Security policy cloud view
-│   ├── Zone ensp.png                ← Zone configuration screenshot
-│   ├── Zone list cloud.jpeg         ← Zone list in cloud view
-│   └── 1.png, 2.png, 3.png, 4.png, 5.png, 6.png ← Verification evidence screenshots
-│
-├── 🎬 vidoes/
-│   ├── New folder/                  ← Video files directory
-│   └── New folder.zip               ← Compressed video archive
-│
-├── 📽️ presention/
-│   ├── presentation.pptx            ← PowerPoint presentation
-│   └── presntation.pdf              ← PDF presentation
-│
-├── 📂 projact/                      ← Duplicate of project files (backup)
-│   ├── configration/
-│   ├── photo/
-│   ├── presentation.pptx
-│   ├── presntation.pdf
-│   └── vidoes/
-│
-└── 🔬 ensp projact/                 ← ENSP project workspace (15 .topo files + topology)
-    ├── *.topo                       ← 15 ENSP topology save files
-    └── topo.topo                    ← Main ENSP topology file
+## Overview
+
+The lab places a Huawei USG6525E firewall between the simulated Internet and multiple banking network segments. Each department is assigned a separate security zone and traffic is allowed only when it matches an explicit business requirement.
+
+### Demonstrated capabilities
+
+- Multi-zone firewall segmentation
+- Default-deny security policy design
+- Public web publishing with NAT Server
+- Source NAT / Easy-IP for selected internal zones
+- DMZ isolation for web, database, and FTP services
+- FTP ASPF inspection and dynamic data-channel handling
+- ICMP flood defense and blacklist support
+- Policy counters, logging, session, and server-map verification
+
+## Topology
+
+```text
+                 Simulated Internet
+             100.1.1.0/24 / 8.8.8.8
+                        |
+             R-Internet 200.1.1.100
+                        |
+                 Bank-FW 200.1.1.1
+        _____________|____________________________
+       |        |       |       |       |         |
+    Teller   BackOffice  ATM  CustWiFi  DMZ      CCTV
+  .10.0/24  .20.0/24  .30.0/24 .40.0/24 .50.0/24 .60.0/24
+                                      |
+                         WEB / DB / FTP servers
+
+ R-Attacker: 200.1.1.200, test LAN 100.2.2.0/24
 ```
 
----
+The authoritative topology image is available in [`photo/topolgy ensp.png`](photo/topolgy%20ensp.png), and the working eNSP project is [`ensp projact/topo.topo`](ensp%20projact/topo.topo).
 
-## 🏗️ Network Topology
+## Addressing plan
 
-### 📊 Logical Diagram
+| Segment / device | Address | Purpose |
+|---|---:|---|
+| Firewall untrust | `200.1.1.1/24` | External transit |
+| R-Internet | `200.1.1.100/24` | Internet-side router |
+| R-Attacker | `200.1.1.200/24` | Security-test router |
+| Public web address | `200.1.1.10` | NAT Server for HTTP/HTTPS |
+| Teller | `192.168.10.0/24` | Teller workstations |
+| BackOffice | `192.168.20.0/24` | Back-office systems |
+| ATM | `192.168.30.0/24` | ATM segment |
+| Customer WiFi | `192.168.40.0/24` | Guest/customer segment |
+| DMZ | `192.168.50.0/24` | Public and application servers |
+| CCTV | `192.168.60.0/24` | Camera segment |
+| Web server | `192.168.50.10` | HTTP/HTTPS |
+| Database server | `192.168.50.11` | TCP/1521 |
+| FTP server | `192.168.50.12` | FTP/TCP 21 |
 
-```
-                        ┌─────────────────────────────────────────────┐
-                        │              INTERNET (Cloud1)              │
-                        │         R-Internet (8.8.8.8 / LoopBack)     │
-                        │         IP: 200.1.1.100 / 100.1.1.1         │
-                        └──────────────────┬──────────────────────────┘
-                                           │ GigE0/0/3 (200.1.1.100)
-                                           │
-                        ┌──────────────────▼──────────────────────────┐
-                        │           FW-FW (USG6525E)                  │
-                        │        IP: 200.1.1.1 (GigE1/0/0)           │
-                        │                                             │
-                        │  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐ │
-                        │  │Teller│ │BackOff│ │ ATM │ │CustW│ │DMZ  │ │
-                        │  │ZONE  │ │ZONE   │ │ZONE │ │WIFI │ │ZONE │ │
-                        │  │192.16│ │192.16 │ │192.1│ │192.1│ │192.1│ │
-                        │  │8.10. │ │8.20.  │ │8.30 │ │8.40 │ │8.50 │ │
-                        │  │1.1   │ │1.1    │ │1.1  │ │1.1  │ │1.1  │ │
-                        │  └──┬───┘ └──┬────┘ └──┬───┘ └──┬───┘ └──┬──┘ │
-                        │     │        │         │        │        │    │
-                        └─────┼────────┼─────────┼────────┼────────┼────┘
-                              │        │         │        │        │
-                    ┌─────────▼──┐  ┌──▼─────┐ ┌─▼────┐ ┌▼─────┐ ┌▼─────────┐
-                    │  R-Attacker │  │SRV-DB │ │SRV-  │ │SRV-  │ │  CCTV    │
-                    │  (100.2.2.1)│  │192.168│ │WEB   │ │FTP   │ │192.168.60│
-                    └────────────┘  │50.11  │ │192.1 │ │192.1 │ │10        │
-                                  │       │ │50.10 │ │50.12 │ │          │
-                                  └───────┘ └──────┘ └──────┘ └──────────┘
-```
+Full endpoint details are in [`configration/PCs.txt`](configration/PCs.txt) and [`configration/Server.txt`](configration/Server.txt).
 
-### 📍 Device List
+## Security model
 
-| Device | Type | IP Address | Zone/Role |
-|--------|------|------------|-----------|
-| R-Internet | Router | 200.1.1.100 / 100.1.1.1 / LoopBack: 8.8.8.8 | Internet Gateway |
-| R-Attacker | Router | 200.1.1.200 / 100.2.2.1 | Attacker/Test PC |
-| R-BackOffice | Router | 192.168.20.10 | BackOffice Gateway |
-| FW-FW | Firewall (USG6525E) | 200.1.1.1 (untrust), 192.168.0.1 (local) | Core Firewall |
-| SW1-SW5 | Switch | — | Internal switching |
-| SRV-WEB | Server | 192.168.50.10 | Web Banking Server |
-| SRV-DB | Server | 192.168.50.11 | Database Server (Oracle 1521) |
-| SRV-FTP | Server | 192.168.50.12 | FTP Server |
-| PC1 | PC | 100.1.1.10 | Behind R-Internet |
-| PC2 | PC | 100.2.2.10 | Behind R-Attacker |
-| PC3 | PC | 192.168.40.10 | Customer WiFi (Z-CUSTWIFI) |
-| PC4 | PC | 192.168.30.10 | ATM (Z-ATM) |
-| PC5 | PC | 192.168.60.10 | CCTV (Z-CCTV) |
-| PC6 | PC | 192.168.20.10 | BackOffice (Z-BACKOFFICE) |
-| PC7 | PC | 192.168.10.10 | Teller (Z-TELLER) |
+The firewall configuration contains **16 active security-policy rules**. The policy order is important: specific permits appear before broader deny rules, followed by a global default deny.
 
----
+| Source | Allowed destination/service | Result |
+|---|---|---|
+| Internet | DMZ web server, HTTP/HTTPS | Permit |
+| Teller | DMZ database, TCP/1521 | Permit |
+| BackOffice | DMZ web, DB, FTP; CCTV HTTP/RTSP; Internet | Permit |
+| ATM | DMZ database, TCP/1521 | Permit |
+| Customer WiFi | Internet | Permit |
+| CCTV | Any routed destination | Deny |
+| DMZ | Internet | Deny |
+| Any unmatched flow | Any destination | Deny and log |
 
-## 🔥 Firewall Configuration (USG6525E)
+The complete CLI is in [`configration/FW-Bank.txt`](configration/FW-Bank.txt).
 
-### Interfaces & Zones
+## NAT and services
 
-| Interface | IP Address | Zone | Priority |
-|-----------|-----------|------|----------|
-| GigE0/0/0 | 192.168.0.1/24 | local | 100 |
-| GigE1/0/0 | 200.1.1.1/24 | untrust | 5 |
-| GigE1/0/1 | 192.168.10.1/24 | Z-TELLER | 84 |
-| GigE1/0/2 | 192.168.20.1/24 | Z-BACKOFFICE | 80 |
-| GigE1/0/3 | 192.168.30.1/24 | Z-ATM | 60 |
-| GigE1/0/4 | 192.168.40.1/24 | Z-CUSTWIFI | 10 |
-| GigE1/0/5 | 192.168.50.1/24 | Z-DMZ | 49 |
-| GigE1/0/6 | 192.168.60.1/24 | Z-CCTV | 20 |
+### Static NAT Server
 
-### Security Policy Rules (17 Rules)
+| Public endpoint | Private endpoint |
+|---|---|
+| `200.1.1.10:80` | `192.168.50.10:80` |
+| `200.1.1.10:443` | `192.168.50.10:443` |
 
-| # | Rule Name | Source Zone | Destination Zone | Action | Service | Description |
-|---|-----------|------------|-----------------|--------|---------|-------------|
-| 1 | `inbound_webbank` | untrust | Z-DMZ | **permit** | http, https | Internet → Web Banking |
-| 2 | `deny_internet_other` | untrust | — | **deny** | all | Default deny from Internet |
-| 3 | `teller_to_db` | Z-TELLER | Z-DMZ | **permit** | DB_1521 (1521/tcp) | Teller → Database |
-| 4 | `deny_teller_internet` | Z-TELLER | untrust | **deny** | all | Teller cannot access Internet |
-| 5 | `deny_teller_other` | Z-TELLER | — | **deny** | all | Teller deny other |
-| 6 | `bo_to_web` | Z-BACKOFFICE | Z-DMZ | **permit** | http, https | BackOffice → Web |
-| 7 | `bo_to_db` | Z-BACKOFFICE | Z-DMZ | **permit** | DB_1521 | BackOffice → Database |
-| 8 | `bo_to_ftp` | Z-BACKOFFICE | Z-DMZ | **permit** | ftp + ASPF | BackOffice → FTP |
-| 9 | `bo_to_internet` | Z-BACKOFFICE | untrust | **permit** | all | BackOffice → Internet |
-| 10 | `bo_to_cctv` | Z-BACKOFFICE | Z-CCTV | **permit** | http, rtsp | BackOffice → CCTV |
-| 11 | `atm_to_db` | Z-ATM | Z-DMZ | **permit** | DB_1521 | ATM → Database |
-| 12 | `deny_atm_other` | Z-ATM | — | **deny** | all | ATM deny other |
-| 13 | `custwifi_to_internet` | Z-CUSTWIFI | untrust | **permit** | all | Customer WiFi → Internet |
-| 14 | `deny_custwifi_internal` | Z-CUSTWIFI | — | **deny** | all | Customer WiFi internal deny |
-| 15 | `deny_cctv_any` | Z-CCTV | — | **deny** | all | CCTV deny all |
-| 16 | `deny_dmz_internet` | Z-DMZ | untrust | **deny** | all | DMZ cannot access Internet |
-| 17 | `default_deny` | — | — | **deny** | all | Default deny all |
+### Source NAT
 
-### NAT Configuration
+Easy-IP is configured for:
 
-#### Static NAT Server (Port Forwarding)
-| Name | Protocol | Global IP | Global Port | Inside IP | Inside Port |
-|------|----------|-----------|-------------|-----------|-------------|
-| `web_banking_80` | TCP | 200.1.1.10 | 80 | 192.168.50.10 | 80 |
-| `web_banking_443` | TCP | 200.1.1.10 | 443 | 192.168.50.10 | 443 |
+- `192.168.20.0/24` (BackOffice) to `untrust`
+- `192.168.40.0/24` (Customer WiFi) to `untrust`
 
-#### Source NAT (Easy-IP)
-| Rule Name | Source Zone | Destination Zone | Source Address | Action |
-|-----------|------------|-----------------|----------------|--------|
-| `bo_internet` | Z-BACKOFFICE | untrust | 192.168.20.0/24 | easy-ip |
-| `custwifi_internet` | Z-CUSTWIFI | untrust | 192.168.40.0/24 | easy-ip |
+### Attack defense
 
-### Attack Defense
-| Feature | Status | Max Rate |
-|---------|--------|----------|
-| ICMP Flood | ✅ Enabled | 100 pps |
-| SYN Flood | ❌ Disabled | 1000 pps |
-| UDP Flood | ❌ Disabled | 1000 pps |
+- ICMP flood defense: enabled, threshold `100`
+- ICMP redirect defense: enabled
+- Blacklist: enabled
 
----
+## Running the lab
 
-## 📡 Router Configurations
+1. Install a compatible Huawei eNSP release and required device templates.
+2. Open the `.topo` file from [`ensp projact/`](ensp%20projact/).
+3. Start the devices and wait for interfaces to become operational.
+4. Apply or compare the device configurations in [`configration/`](configration/).
+5. Configure server services and endpoint IP settings from the inventory files.
+6. Run the checks in [`configration/Verification.txt`](configration/Verification.txt).
+7. Compare the results with the evidence in [`photo/`](photo/).
 
-### R-Internet (Internet Gateway)
-```
-sysname R-Internet
-interface Ethernet0/0/1: IP 200.1.1.100/24 (to Internet)
-interface Ethernet0/0/2: IP 100.1.1.1/24 (to internal)
-interface LoopBack0: IP 8.8.8.8/32 (simulates Internet)
-ip route-static 0.0.0.0/0 → 200.1.1.1 (default route)
-ip route-static 100.2.2.0/24 → 200.1.1.200 (to attacker)
-```
+Compatibility can vary by eNSP and USG image version; always test commands in the simulator before applying them to another environment.
 
-### R-Attacker (Security Testing PC)
-```
-sysname R-Attacker
-interface GigE0/0/1: IP 200.1.1.200/24 (to Internet side)
-interface GigE0/0/2: IP 100.2.2.1/24 (to internal)
-ip route-static 0.0.0.0/0 → 200.1.1.1
-```
+## Verification
 
-### R-BackOffice (Internal Router)
-```
-sysname R-BackOffice
-interface GigE0/0/1: IP 192.168.20.10/24 (BackOffice LAN)
-ip route-static 0.0.0.0/0 → 192.168.20.1
-```
+Useful Huawei firewall commands:
 
----
-
-## 🖼️ Photo Verification Results
-
-### Photo 1: NAT Translation Verification
-- `display firewall server-map` confirms static NAT entries
-- `display firewall session table` shows HTTP session from 200.1.1.100 → [192.168.50.10:80]
-- **Result**: ✅ Internet host reaches 200.1.1.10:80 → translated to 192.168.50.10
-
-### Photo 2: Security Policy Hit Counters
-- 17 security policy rules with HIT counters
-- Permitted rules have hits: `inbound_webbank` (5), `bo_to_internet` (15), `custwifi_to_internet` (10)
-- Denied rules show "background noise": `deny_internet_other` (34), `deny_teller_internet` (10), `default_deny` (421)
-- **Result**: ✅ Only intended traffic passes, all others denied and logged
-
-### Photo 3: Teller Internet Access Blocked
-- `deny_teller_internet` counter increased from 10 → 15
-- `default_deny` counter increased from 421 → 444
-- Other counters remained stable (no other violations)
-- **Result**: ✅ Teller zone cannot access Internet, every attempt logged
-
-### Photo 4: Firewall Filtering Statistics
-- Total received: 17,152 packets
-- Discarded by policy: 531 packets
-- Route misses: 3 packets
-- Unresolved ARP: 12 attempts
-- **Result**: ✅ All traffic passes through firewall, no bypass
-
-### Photo 5: FTP Access (BackOffice → FTP Server)
-- Source: 192.168.20.10 (Z-BACKOFFICE)
-- Destination: 192.168.50.12:21 (SRV-FTP in DMZ)
-- Control channel: FTP 230 User logged in
-- Data channel: 226 Transfer finished successfully (20,500 bytes)
-- **Result**: ✅ `bo_to_ftp` policy works with ASPF
-
-### Photo 6: ASPF in Action (Dynamic Data Channel)
-- Control channel: `ftp 192.168.20.10:50581 → 192.168.50.12:21` (permitted by policy)
-- Data channel: `tcp-data 192.168.50.12:20 → 192.168.20.10:51129` (opened dynamically by ASPF)
-- Without ASPF: data channel would be blocked (from DMZ to internal zone)
-- **Result**: ✅ ASPF dynamically opens FTP data channel
-
----
-
-## ✅ Verification Commands
-
-```bash
-# NAT Server Verification
-telnet 200.1.1.10 80          (from R-Internet)
-telnet 200.1.1.10 23          (should be rejected)
-
-# Database Access Verification  
-telnet 192.168.50.11 1521     (from R-Teller)
-
-# FTP Access Verification
-ftp 192.168.50.12 → dir       (from R-BackOffice)
-
-# Attack Defense Verification
-ping -c 10000 -m 1 200.1.1.1  (from R-Attacker - test ICMP flood defense)
-
-# Firewall Status
+```text
 display firewall defend flag
 display firewall server-map
 display firewall session table
 display firewall policy all
 ```
 
----
+Functional tests include:
 
-## 📊 Network Zones Summary
+```text
+telnet 200.1.1.10 80
+telnet 200.1.1.10 23
+ telnet 192.168.50.11 1521
+ftp 192.168.50.12
+test ping -c 10000 -m 1 200.1.1.1
+```
 
-| Zone Name | Priority | Interface | Subnet | Internet Access |
-|-----------|----------|-----------|--------|----------------|
-| local | 100 | — | 192.168.0.0/24 | — |
-| untrust | 5 | GigE1/0/0 | 200.1.1.0/24 | — |
-| Z-TELLER | 84 | GigE1/0/1 | 192.168.10.0/24 | ❌ Denied |
-| Z-BACKOFFICE | 80 | GigE1/0/2 | 192.168.20.0/24 | ✅ Permitted |
-| Z-ATM | 60 | GigE1/0/3 | 192.168.30.0/24 | ❌ Denied |
-| Z-CUSTWIFI | 10 | GigE1/0/4 | 192.168.40.0/24 | ✅ Permitted |
-| Z-DMZ | 49 | GigE1/0/5 | 192.168.50.0/24 | ❌ Denied |
-| Z-CCTV | 20 | GigE1/0/6 | 192.168.60.0/24 | ❌ Denied |
+Use the ICMP flood test only inside the eNSP lab. The expected results and evidence descriptions are documented in [`photo/info.txt`](photo/info.txt).
 
----
+## Repository map
 
-## 🎯 Security Design Principles
+| Path | Description |
+|---|---|
+| [`configration/`](configration/) | Firewall, router, endpoint, server, and verification files |
+| [`ensp projact/`](ensp%20projact/) | Raw eNSP project and device state files |
+| [`photo/`](photo/) | Topology, policy, NAT, zone, and verification evidence |
+| [`presention/`](presention/) | PPTX and PDF presentation |
+| [`LICENSE`](LICENSE) | MIT license |
 
-1. **Defense in Depth**: Multiple security layers (firewall + zones + policies)
-2. **Least Privilege**: Only necessary traffic is permitted between zones
-3. **Default Deny**: All unspecified traffic is blocked (`default_deny` rule)
-4. **Logging & Monitoring**: All denied traffic is logged for audit
-5. **Network Segmentation**: Each department in its own security zone
-6. **NAT Protection**: Internal IPs hidden from Internet
-7. **ASPF**: Dynamic FTP data channel inspection
-8. **Attack Defense**: ICMP flood protection enabled
+## Known notes
 
----
+- The original project folder names (`configration`, `presention`, and `ensp projact`) are preserved to avoid breaking existing eNSP/project links.
+- `R-Attacker .txt` is the original uploaded filename; [`R-Attacker.txt`](configration/R-Attacker.txt) is also provided as a clean, space-free copy.
+- The FTP username and password in the inventory are demonstration credentials only and must not be reused outside the lab.
+- Binary eNSP files should be opened through eNSP rather than edited as text.
 
-## 📝 File Descriptions — All Files in Project
+## License
 
-### `cloud/topology_cloud.json`
-ENSP cloud topology definition file containing all nodes (routers, switches, firewalls, PCs, servers) and their connections, positions, initial configurations (IP addresses, routes, zones), security policies, NAT rules, and zone definitions. Used to load the complete network topology in ENSP.
-
-### `configration/FW-Bank.txt`
-Complete Huawei USG6525E firewall CLI configuration including:
-- Interface IP assignments (8 interfaces)
-- Zone definitions (local, untrust, Z-TELLER, Z-BACKOFFICE, Z-ATM, Z-CUSTWIFI, Z-DMZ, Z-CCTV)
-- Static routes (default + 2 internal)
-- Service object definition (DB_1521 for Oracle on port 1521)
-- 17 security policy rules with permit/deny actions
-- NAT server rules (web banking port forwarding)
-- NAT policy rules (source NAT Easy-IP for BackOffice and Customer WiFi)
-- Attack defense settings (ICMP flood enabled)
-- AAA management user configuration
-
-### `configration/R-Internet.txt`
-Router configuration for the Internet gateway router:
-- 2 Ethernet interfaces (200.1.1.100 and 100.1.1.1)
-- LoopBack0 with 8.8.8.8 (simulating Internet)
-- Default route to 200.1.1.1
-- Route to 100.2.2.0/24 via 200.1.1.200
-
-### `configration/R-Attacker.txt`
-Router configuration for the attacker/test PC:
-- 2 Ethernet interfaces (200.1.1.200 and 100.2.2.1)
-- Default route to 200.1.1.1
-- Used for penetration testing and attack simulation
-
-### `configration/R-BackOffice.txt`
-Router configuration for the BackOffice internal router:
-- 1 Ethernet interface (192.168.20.10/24)
-- Default route to 192.168.20.1
-
-### `configration/Server.txt`
-Table documenting all servers:
-- Server-WEB: 192.168.50.10/24, Gateway 192.168.50.1
-- Server-DB: 192.168.50.11/24, Gateway 192.168.50.1
-- Server-FTP: 192.168.50.12/24, Gateway 192.168.50.1 (credentials: bank/Bank@123)
-
-### `configration/PCs.txt`
-Table documenting all PC configurations:
-- PC1: 100.1.1.10 (behind R-Internet)
-- PC2: 100.2.2.10 (behind R-Attacker)
-- PC3: 192.168.40.10 (Customer WiFi / LSW3)
-- PC4: 192.168.30.10 (ATM / LSW4)
-- PC5: 192.168.60.10 (CCTV / LSW5)
-- PC7: 192.168.10.10 (Teller / LSW7)
-- PC6: 192.168.20.10 (BackOffice / LSW6)
-
-### `configration/Verification.txt`
-List of verification commands to test the network:
-- Telnet to verify NAT
-- FTP access test from BackOffice
-- ICMP flood attack simulation
-- Firewall defend status check
-
-### `photo/info.txt`
-Detailed descriptions of all 6 verification photos:
-- Photo 1: NAT translation proof (server-map + session table)
-- Photo 2: Security policy hit counters (17 rules)
-- Photo 3: Real-time evidence of Teller internet blocking
-- Photo 4: Firewall filtering statistics (17,152 packets)
-- Photo 5: FTP session from BackOffice (with ASPF)
-- Photo 6: ASPF dynamic data channel demonstration
-
-### `photo/*.png` and `photo/*.jpeg`
-Screenshot images from ENSP showing:
-- Network topology diagrams
-- Interface configurations
-- NAT policy configuration
-- Security policy configuration
-- Zone configuration
-- Verification evidence
-
-### `vidoes/New folder.zip`
-Compressed video archive containing screen recordings of the project demonstration
-
-### `presention/presentation.pptx`
-PowerPoint presentation slides explaining the project
-
-### `presention/presntation.pdf`
-PDF version of the presentation
-
-### `ensp projact/*.topo`
-15 ENSP project topology save files (binary format) — different versions/saves of the network simulation project
-
-### `ensp projact/topo.topo`
-Main ENSP topology file (latest version)
-
----
-
-## 🔑 Key Technologies Used
-
-| Technology | Purpose |
-|-----------|---------|
-| **Huawei ENSP** | Network simulation platform |
-| **USG6525E Firewall** | Core security appliance |
-| **Security Zones** | Network segmentation |
-| **NAT Server** | Port forwarding for web banking |
-| **Source NAT (Easy-IP)** | Outbound internet access |
-| **ASPF** | Application layer FTP inspection |
-| **Security Policies** | 17-rule permit/deny matrix |
-| **Attack Defense** | ICMP flood protection |
-| **AAA** | Admin user management |
-| **VRRP** | High availability (configured, standby) |
-| **IPsec/SSL VPN** | Configured but not active |
-
----
-
-## 📈 Project Status
-
-- ✅ Topology configured and verified
-- ✅ All firewall rules implemented
-- ✅ NAT (static + source) working
-- ✅ ASPF for FTP verified
-- ✅ Attack defense tested
-- ✅ All 6 verification photos captured
-- ✅ Presentation prepared (PPTX + PDF)
-- ✅ Video documentation available
-
----
-
-## 📄 License
-
-This project documentation was auto-generated from the ENSP project files.
-
----
-
-*Generated: September 2026*
+Distributed under the [MIT License](LICENSE).
