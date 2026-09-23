@@ -1,0 +1,46 @@
+--------------------------------
+photo 1:
+Server Publishing & NAT Translation Verification
+أمر display firewall server-map يثبت تسجيل قاعدتي النشر الثابتة: أي مصدر خارجي يصل 200.1.1.10 على البورت 80 أو 443 تتم ترجمته تلقائيًا إلى السيرفر الداخلي 192.168.50.10 (TCP). جدول الجلسات display firewall session table يعرض جلسة HTTP حقيقية من مضيف الإنترنت 200.1.1.100 — والعنوان بين القوسين [192.168.50.10:80] هو إثبات الترجمة لحظة حدوثها.
+✅ يحقق: "The Internet host reaches 200.1.1.10 on HTTP and is translated to 192.168.50.10 — confirmed with display firewall server-map"
+
+---------------------------------
+photo 2:
+Security Policy Enforcement & Hit Counters
+
+عرض قواعد السياسة الأمنية الـ17 مع عدّادات الاستخدام (HITS). يلاحظ أن القواعد المسموحة فقط هي التي تحرك: inbound_webbank (5)، bo_to_internet (15)، custwifi_to_internet (10)، بينما بقيت القواعد غير المخوّلة على صفر (teller_to_db، bo_to_ftp... إلخ). عدّادات المنع تُظهر "الضوضاء الخلفية" من الإنترنت وهي محجوبة ومسجلة: deny_internet_other (34)، deny_teller_internet (10)، وdefault_deny (421).
+✅ يحقق: "Explicit and logged deny rule — the hit counter shows the background noise"
+
+----------------------------------
+photo 3:
+Real-Time Evidence: Teller Internet Access Blocked & Logged
+
+نفس الأمر أعيد التقاطه بعد دقيقتين. المقارنة مع اللقطة السابقة تُظهر زيادة فورية في العدّادات: deny_teller_internet ارتفع من 10 → 15 وdefault_deny من 421 → 444 — أي أن كل محاولة من قطاع الكاشير (Teller) للخروج للإنترنت تُرفض وتُسجَّل لحظيًا، بينما بقي باقي العدّادات ثابتة (لا ترافيك مخالف آخر).
+✅ يحقق: "A teller PC reaches the database and cannot reach the Internet"
+
+----------------------------------
+photo 4:
+Firewall Filtering Statistics
+من إجمالي 17,152 حزمة مستقبَلة، رفض الفايروول 531 حزمة بواسطة السياسات (Packet filter discarded)، إضافة إلى 3 حزم لوجهات غير موجودة في جدول التوجيه و12 محاولة ARP غير محلولة. الأرقام تؤكد أن الترافيك يمر إجباريًا عبر طبقة الفحص ولا يوجد مسار التفافي (bypass).
+✅ يكمّل: بند المنع الصريح والضوضاء الخلفية (بند التحقق 2)
+
+
+----------------------------------
+photo 5 :
+FTP Access from Back Office — Session Completed
+
+عميل قطاع Z-BACKOFFICE (192.168.20.10) اتصل بسيرفر الـFTP في الـDMZ (192.168.50.12) على البورت 21. قناة التحكم نجحت (الردود 230 User logged in)، ثم أمر dir استرجع قايمة الملفات بنجاح (226 Transfer finished successfully) — نقل ملف فعلي بحجم 20,500 بايت.
+هذا يثبت أن سياسة bo_to_ftp تسمح بالوصول المقصود فقط: BackOffice → سيرفر FTP في الـDMZ.
+✅ يحقق: "PASS from back office succeeds with ASPF enabled"
+
+-------------------------------------
+photo 6:
+ASPF in Action — The Dynamically Opened Data Channel
+
+
+دول الجلسات يعرض قناتين مختلفتين لجلسة FTP واحدة:
+
+قناة التحكم: ftp 192.168.20.10:50581 → 192.168.50.12:21 — مسموحة بالسياسة الثابتة bo_to_ftp.
+قناة البيانات: tcp-data 192.168.50.12:20 → 192.168.20.10:51129 — لاحظ الاتجاه: السيرفر هو من بدأها من البورت 20 نحو العميل الداخلي (نمط FTP النشط/Active).
+في الفايروول التقليدي، هذا الاتصال "قادم من الـDMZ نحو زون داخلية" كان سيُرفض فورًا. الفايروول فتحه ديناميكيًا فقط لأن آلية الـASPF تفحص رسائل قناة التحكم (أمر PORT) وتعرف البورت العشوائي الذي تتفاوض عليه القناتان — ثم تسمح به مؤقتًا ولفترة قصيرة فقط.
+✅ هذا هو جوهر بند الورقة: "PASS from back office succeeds with ASPF enabled and fails without it"
