@@ -1,0 +1,10 @@
+system-view
+sysname R-BackOffice
+interface g0/0/1
+ undo shutdown
+ ip address 192.168.20.10 255.255.255.0
+ quit
+ip route-static 0.0.0.0 0.0.0.0 192.168.20.1
+quit
+save
+y

@@ -1,0 +1,13 @@
+ telnet 200.1.1.10 80          (من R-Internet)
+
+telnet 200.1.1.10 23           (يرفض)
+
+telnet 192.168.50.11 1521     (من R-Teller لو موجود / HITS)
+
+ftp 192.168.50.12 → dir       (من R-BackOffice)
+
+ping -c 10000 -m 1 200.1.1.1  (من R-Attacker)
+
+display firewall defend flag
+
+
